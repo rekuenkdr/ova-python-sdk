@@ -1,10 +1,11 @@
 """OVA Python SDK — programmatic access to the OVA voice assistant."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from ._asr import ASRStream, AsyncASRStream
 from ._audio import play, save
 from ._client import AsyncOVA, OVA
+from ._duplex import AsyncDuplexSession, DuplexEventHandler, DuplexSession
 from ._errors import (
     OVAAuthenticationError,
     OVAConnectionError,
@@ -23,6 +24,9 @@ __all__ = [
     "AsyncAudioStream",
     "ASRStream",
     "AsyncASRStream",
+    "DuplexSession",
+    "AsyncDuplexSession",
+    "DuplexEventHandler",
     "BatchTTSItem",
     "BatchTTSResult",
     "DialogueBatchResult",

@@ -9,6 +9,7 @@ from typing import Optional, Union
 import httpx
 
 from ._asr import ASRResource, AsyncASRResource
+from ._duplex import AsyncDuplexResource, DuplexResource
 from ._base import (
     DEFAULT_TIMEOUT,
     _resolve_api_key,
@@ -52,6 +53,7 @@ class OVA:
         self.dialogue = DialogueResource(self._http)
         self.settings = SettingsResource(self._http)
         self.asr = ASRResource(self._base_url, self._api_key)
+        self.duplex = DuplexResource(self._base_url, self._api_key)
 
     def info(self) -> Info:
         """GET /v1/info — pipeline configuration."""
@@ -171,6 +173,7 @@ class AsyncOVA:
         self.dialogue = AsyncDialogueResource(self._http)
         self.settings = AsyncSettingsResource(self._http)
         self.asr = AsyncASRResource(self._base_url, self._api_key)
+        self.duplex = AsyncDuplexResource(self._base_url, self._api_key)
 
     async def info(self) -> Info:
         try:
