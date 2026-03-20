@@ -1,6 +1,6 @@
 # OVA SDK
 
-Python SDK for the [OVA](https://github.com/rekuenkdr/ova) voice assistant server — text-to-speech, chat, transcription, and settings in a few lines of code.
+Python SDK for the [OVA](https://github.com/rekuenkdr/ova) voice assistant server — text-to-speech, chat, full-duplex voice conversation, transcription, and settings in a few lines of code.
 
 ## Installation
 
@@ -77,6 +77,43 @@ final_text = stream.finish()      # finalize and get full text
 stream.close()
 ```
 
+### Full-Duplex Voice Conversation
+
+Hands-free, real-time voice conversation over a single WebSocket. The server handles VAD, turn-taking, and interruption — the client streams mic audio in and plays bot audio out.
+
+```python
+from ova_sdk import OVA, DuplexEventHandler
+
+client = OVA()
+client.wait_until_ready()
+
+handler = DuplexEventHandler(
+    on_session_started=lambda sr: print(f"Session started ({sr} Hz)"),
+    on_vad=lambda speech: print("[listening]" if speech else ""),
+    on_transcript=lambda text, final: print(f"You: {text}" if final else ""),
+    on_bot_thinking=lambda: print("Thinking..."),
+    on_bot_speaking=lambda: print("Speaking..."),
+    on_bot_idle=lambda: print("[idle]"),
+    on_bot_interrupted=lambda: print("[interrupted]"),
+    on_error=lambda msg: print(f"Error: {msg}"),
+)
+
+session = client.duplex.connect(language="en", voice="af_heart", handler=handler)
+session.run_with_audio()  # blocks — streams mic in, plays audio out
+```
+
+For production use with proper barge-in handling (stopping TTS playback when the user interrupts), see [`examples/12-duplex_conversation.py`](examples/12-duplex_conversation.py) which manages audio I/O directly with state tracking and buffer clearing.
+
+**Session methods:**
+
+```python
+session.send_text("Hello")           # Send text as if user spoke it
+session.send_image(base64_data)      # Queue image for next turn
+session.send_config(voice="other")   # Switch voice/language at runtime
+session.interrupt()                  # Stop bot speech
+session.close()                      # End session
+```
+
 ### Batch TTS
 
 Synthesize many texts in a single request.
@@ -134,6 +171,7 @@ The SDK wraps these OVA server endpoints:
 | `client.chat.send_audio()` | POST | `/v1/chat/audio` | Audio → LLM → spoken response |
 | `client.transcribe()` | POST | `/v1/speech-to-text` | One-shot transcription |
 | `client.asr.stream()` | WS | `/v1/speech-to-text/stream` | Real-time streaming ASR |
+| `client.duplex.connect()` | WS | `/v1/duplex` | Full-duplex voice conversation |
 | `client.info()` | GET | `/v1/info` | Server configuration |
 | `client.settings.get()` | GET | `/v1/settings` | Current settings |
 | `client.settings.update()` | POST | `/v1/settings` | Update settings |
@@ -259,6 +297,7 @@ Ready-to-run scripts in [`examples/`](examples/):
 | [`09-transcribe_audio.py`](examples/09-transcribe_audio.py) | Standalone speech-to-text with text file output |
 | [`10-interactive_chat.py`](examples/10-interactive_chat.py) | Interactive voice chat — speak into the mic, hear the reply |
 | [`11-error_handling.py`](examples/11-error_handling.py) | Proper error handling patterns for every exception type |
+| [`12-duplex_conversation.py`](examples/12-duplex_conversation.py) | Full-duplex voice conversation with barge-in and latency measurement |
 
 ## API Reference
 
@@ -323,6 +362,40 @@ Ready-to-run scripts in [`examples/`](examples/):
 | `.receive()` | `dict` | Receive partial/final transcript |
 | `.finish()` | `str` | End stream, get final transcript |
 | `.close()` | `None` | Close WebSocket |
+
+### Duplex
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.duplex.connect(language=None, voice=None, handler=None)` | `DuplexSession` | Open full-duplex WebSocket session |
+
+**DuplexSession / AsyncDuplexSession:**
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `.run()` | `None` | Blocking receive loop (dispatches events to handler) |
+| `.run_with_audio(mic_rate=16000)` | `None` | Convenience: open mic + speaker and run receive loop |
+| `.send_audio(pcm)` | `None` | Send PCM int16 audio (bytes or ndarray) |
+| `.send_text(text, image=None)` | `None` | Send text as if user spoke it |
+| `.send_image(data)` | `None` | Queue base64 image for next turn |
+| `.send_config(language=None, voice=None)` | `None` | Update language/voice at runtime |
+| `.interrupt()` | `None` | Request the bot to stop speaking |
+| `.close()` | `None` | Gracefully end the session |
+
+**DuplexEventHandler callbacks (all optional):**
+
+| Callback | Signature | When |
+|----------|-----------|------|
+| `on_session_started` | `(sample_rate: int)` | Session opened, TTS sample rate declared |
+| `on_session_ended` | `()` | Session closed |
+| `on_vad` | `(speech: bool)` | Voice activity detected / ended |
+| `on_transcript` | `(text: str, is_final: bool)` | Partial or final ASR transcript |
+| `on_bot_thinking` | `()` | LLM processing started |
+| `on_bot_speaking` | `()` | TTS audio streaming started |
+| `on_bot_idle` | `()` | Bot finished, waiting for user |
+| `on_bot_interrupted` | `()` | Bot speech was interrupted |
+| `on_audio` | `(pcm_bytes: bytes)` | Raw PCM int16 TTS audio chunk |
+| `on_error` | `(message: str)` | Error occurred |
 
 ### AudioStream
 
